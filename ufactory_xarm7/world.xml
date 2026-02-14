@@ -1,0 +1,33 @@
+<mujoco model="orchard_world">
+
+    <compiler angle="degree" meshdir="meshes"/>
+
+    <option gravity="0 0 -9.81"/>
+
+    <visual>
+        <map znear="0.01" zfar="50"/>
+    </visual>
+
+    <asset>
+        <texture name="ground_tex" type="2d" builtin="checker"
+                 rgb1="0.2 0.3 0.2"
+                 rgb2="0.1 0.2 0.1"
+                 width="512" height="512"/>
+        <material name="ground_mat"
+                  texture="ground_tex"
+                  texrepeat="10 10"/>
+    </asset>
+
+    <worldbody>
+
+        <light pos="0 0 5" dir="0 0 -1"/>
+
+        <geom type="plane"
+              size="10 10 0.1"
+              material="ground_mat"/>
+
+        <include file="xarm7.xml"/>
+
+    </worldbody>
+
+</mujoco>
