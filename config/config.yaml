@@ -3,6 +3,9 @@ defaults:
   - env: mujoco
   - algorithm: sac
   - experiment: baseline
+  - randomization: rand_conf
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
 
 seed: 42
 total_steps: 10000

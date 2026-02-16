@@ -26,6 +26,98 @@
               size="10 10 0.1"
               material="ground_mat"/>
 
+        <!-- ======================================================
+             Apple tree with spring-jointed (deformable) branches.
+             Each branch is a 2-segment rigid chain; ball joints with
+             stiffness + damping give spring-back behaviour on contact.
+
+             Apples:
+               apple_a  — right branch, fully visible
+               apple_b  — left branch, fully visible
+               apple_occluded — deep branch, hidden behind leaves_c
+                                (leaf cluster sits at lower x than the
+                                 fruit, occluding it from the robot POV)
+        ====================================================== -->
+        <body name="tree" pos="0.65 0 0">
+
+            <!-- Trunk (world-fixed, no joint) -->
+            <geom name="trunk" type="cylinder"
+                  size="0.04 0.45" pos="0 0 0.45"
+                  rgba="0.45 0.28 0.12 1"/>
+
+            <!-- Branch A — right side, apple_a visible -->
+            <body name="branchA1" pos="0.01 0 0.68">
+                <joint name="branchA_j1" type="ball"
+                       stiffness="80" damping="6"/>
+                <geom type="capsule" fromto="0 0 0  0.22 0.04 0.10"
+                      size="0.017" rgba="0.45 0.28 0.12 1"/>
+                <body name="branchA2" pos="0.22 0.04 0.10">
+                    <joint name="branchA_j2" type="ball"
+                           stiffness="40" damping="3"/>
+                    <geom type="capsule" fromto="0 0 0  0.14 0.02 0.07"
+                          size="0.011" rgba="0.45 0.28 0.12 1"/>
+                    <body name="apple_a">
+                        <geom type="sphere" size="0.034"
+                              rgba="0.88 0.10 0.06 1"/>
+                    </body>
+                </body>
+            </body>
+
+            <!-- Branch B — left side, apple_b visible -->
+            <body name="branchB1" pos="-0.01 0 0.76">
+                <joint name="branchB_j1" type="ball"
+                       stiffness="80" damping="6"/>
+                <geom type="capsule" fromto="0 0 0  -0.20 0.06 0.12"
+                      size="0.016" rgba="0.45 0.28 0.12 1"/>
+                <body name="branchB2" pos="-0.20 0.06 0.12">
+                    <joint name="branchB_j2" type="ball"
+                           stiffness="40" damping="3"/>
+                    <geom type="capsule" fromto="0 0 0  -0.12 0.03 0.07"
+                          size="0.010" rgba="0.45 0.28 0.12 1"/>
+                    <body name="apple_b">
+                        <geom type="sphere" size="0.034"
+                              rgba="0.88 0.10 0.06 1"/>
+                    </body>
+                </body>
+            </body>
+
+            <!-- Branch C — deep into canopy, apple_occluded hidden -->
+            <body name="branchC1" pos="0 0 0.84">
+                <joint name="branchC_j1" type="ball"
+                       stiffness="80" damping="6"/>
+                <geom type="capsule" fromto="0 0 0  0.10 0.16 0.08"
+                      size="0.015" rgba="0.45 0.28 0.12 1"/>
+                <body name="branchC2" pos="0.10 0.16 0.08">
+                    <joint name="branchC_j2" type="ball"
+                           stiffness="40" damping="3"/>
+                    <geom type="capsule" fromto="0 0 0  0.05 0.12 0.05"
+                          size="0.009" rgba="0.45 0.28 0.12 1"/>
+                    <!-- Leaf cluster: sits between robot (x≈0) and the
+                         apple (higher x), creating depth occlusion -->
+                    <geom name="leaves_c" type="sphere"
+                          pos="-0.02 0.06 0.03" size="0.065"
+                          rgba="0.15 0.44 0.11 1"
+                          contype="0" conaffinity="0"/>
+                    <!-- Occluded apple: behind leaves_c from robot POV -->
+                    <body name="apple_occluded" pos="0.04 0.10 0.04">
+                        <geom name="apple_occluded_geom" type="sphere"
+                              size="0.034" rgba="0.88 0.10 0.06 1"/>
+                    </body>
+                </body>
+            </body>
+
+            <!-- Canopy foliage — visual only, no collision -->
+            <geom type="sphere" pos=" 0.00  0.00 1.05" size="0.21"
+                  rgba="0.16 0.44 0.12 0.9" contype="0" conaffinity="0"/>
+            <geom type="sphere" pos=" 0.14 -0.08 0.96" size="0.17"
+                  rgba="0.13 0.40 0.10 0.9" contype="0" conaffinity="0"/>
+            <geom type="sphere" pos="-0.13  0.10 0.93" size="0.18"
+                  rgba="0.18 0.46 0.14 0.9" contype="0" conaffinity="0"/>
+            <geom type="sphere" pos=" 0.04  0.15 0.99" size="0.16"
+                  rgba="0.14 0.42 0.12 0.9" contype="0" conaffinity="0"/>
+
+        </body>
+
     </worldbody>
 
 </mujoco>

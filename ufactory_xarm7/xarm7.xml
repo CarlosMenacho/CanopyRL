@@ -154,7 +154,7 @@
                       </body>
                       <site name="link_tcp" pos="0 0 .172"/>
                       <camera name="eye_in_hand"
-                              pos="0 0 0.05"
+                              pos="0 0 0.17"
                               xyaxes="1 0 0 0 -1 0"
                               fovy="58"/>
                     </body>
