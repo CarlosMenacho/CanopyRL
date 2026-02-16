@@ -1,0 +1,14 @@
+defaults:
+  - _self_
+  - env: mujoco
+  - algorithm: sac
+  - experiment: baseline
+
+seed: 42
+total_steps: 10000
+
+hydra:
+  job:
+    chdir: true
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
