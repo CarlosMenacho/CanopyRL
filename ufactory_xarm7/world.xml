@@ -42,7 +42,7 @@
                                 (leaf cluster sits at lower x than the
                                  fruit, occluding it from the robot POV)
         ====================================================== -->
-        <body name="tree" pos="0.65 0 0">
+        <body name="tree" pos="0.70 0 0" euler="0 0 3.14159">
 
             <!-- Trunk (world-fixed, no joint) -->
             <geom name="trunk" type="cylinder"
