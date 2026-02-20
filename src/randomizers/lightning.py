@@ -22,19 +22,19 @@ class LightingRandomizer(Randomizer):
 
     def apply(self, *, spec, model, data, rng, ext=None):
 
-        ligh_bid = model.body("light0").id
-        if ligh_bid is not None:
-            model.body_pos[ligh_bid]
-
         def _rand_rgb(lo_hi):
             lo, hi = lo_hi
             return rng.uniform(lo, hi, size=3)
 
-        model.light_diffuse[0] = _rand_rgb(self.diffuse_rng)
-        model.light_ambient[0] = _rand_rgb(self.ambient_rng)
-        model.light_specular[0] = _rand_rgb(self.specular_rng)
+        # Randomise all lights in the scene (world.xml defines 3 unnamed lights).
+        for i in range(model.nlight):
+            model.light_pos[i] = rng.uniform(self.pos_low, self.pos_high)
+            model.light_diffuse[i] = _rand_rgb(self.diffuse_rng)
+            model.light_ambient[i] = _rand_rgb(self.ambient_rng)
+            model.light_specular[i] = _rand_rgb(self.specular_rng)
 
+        # Headlight: set (not +=) to avoid accumulation across episodes.
         jitter = rng.uniform(-0.1, 0.1, size=9)
-        model.vis.headlight.diffuse += jitter[:3]
-        model.vis.headlight.ambient += jitter[3:6]
-        model.vis.headlight.specular += jitter[6:9]
+        model.vis.headlight.diffuse[:] = np.clip(0.6 + jitter[:3], 0.0, 1.0)
+        model.vis.headlight.ambient[:] = np.clip(0.4 + jitter[3:6], 0.0, 1.0)
+        model.vis.headlight.specular[:] = np.clip(0.2 + jitter[6:9], 0.0, 1.0)

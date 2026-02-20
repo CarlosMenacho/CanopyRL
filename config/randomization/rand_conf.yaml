@@ -1,1 +1,69 @@
-lights: enabled
+# Domain-randomisation configuration for CanopyRL.
+#
+# Each key maps to a Randomizer class via build_randomisers().
+# Set `enabled: false` (or the whole key to `disabled`) to skip a randomiser.
+# Omitting a key also disables the randomiser.
+# All other keys under each entry are forwarded as __init__ kwargs.
+
+lights:
+  enabled: true
+  diffuse_range: [0.05, 0.30]
+  ambient_range: [0.00, 0.20]
+  specular_range: [0.00, 0.50]
+
+robot_pose:
+  enabled: true
+  pos_lo: [-0.04, -0.05, 0.00]
+  pos_hi: [ 0.04,  0.05, 0.10]
+  rot_enabled: false
+
+fruit_pose:
+  enabled: true
+  pos_delta_lo: [-0.020, -0.020, -0.010]
+  pos_delta_hi: [ 0.020,  0.020,  0.010]
+
+camera_pose:
+  enabled: true
+  pos_delta_lo: [-0.005, -0.005, -0.003]
+  pos_delta_hi: [ 0.005,  0.005,  0.003]
+  rot_enabled: true
+  ang_range: [-0.05, 0.05]
+
+fruit_color:
+  enabled: true
+  hue_center: 0.02
+  hue_spread: 0.12
+  saturation_range: [0.75, 1.00]
+  value_range: [0.65, 1.00]
+
+fruit_mesh_variant:
+  enabled: true
+  scale_range: [0.80, 1.20]
+
+skybox:
+  enabled: true
+  tint_range: [0.50, 1.50]
+
+table:
+  enabled: true
+  color1_range: [0.10, 0.50]
+  color2_range: [0.05, 0.35]
+  tint_range: [0.70, 1.30]
+
+tree_pose:
+  enabled: true
+  pos_delta_lo: [-0.05, -0.08, 0.0]
+  pos_delta_hi: [ 0.05,  0.08, 0.0]
+  yaw_enabled: true
+  yaw_range: [-0.20, 0.20]
+
+# Disabled by default — requires a directory of background image files.
+background_image:
+  enabled: false
+  # image_dir: assets/backgrounds
+
+# Disabled by default — requires alternative mesh files to be present.
+mesh_variant:
+  enabled: false
+  # mesh_names: [link1, link2, link3, link4, link5, link6, link7]
+  # scale_range: [0.98, 1.02]
