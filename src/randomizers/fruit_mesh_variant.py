@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 import mujoco
 import numpy as np
@@ -11,22 +11,19 @@ __all__ = ["FruitMeshVariantRandomizer"]
 
 
 class FruitMeshVariantRandomizer(Randomizer):
-    """Randomises fruit geometry by perturbing sphere radius each episode.
+    """Randomises the size of fruit sphere geoms each episode.
 
-    Modifies ``model.geom_size`` for the geom(s) belonging to each fruit
-    body.  The radius is sampled uniformly from [base * lo_factor,
-    base * hi_factor] so the change is always relative to the compiled size.
-
-    This simulates natural variation in fruit sizes and helps the visual
-    detector generalise across different fruit scales.
+    Independently scales each listed geom's radius by a factor drawn from
+    ``scale_range``, simulating natural fruit-size variation.  The base
+    radius is cached on the first call so scales are always applied to the
+    compiled default, not the previous episode's value.
 
     Parameters
     ----------
-    fruit_body_names:
-        MuJoCo body names for each fruit.
+    geom_names:
+        Names of the fruit geoms to rescale.
     scale_range:
-        (min, max) multiplicative factor applied to the compiled sphere
-        radius.  E.g. (0.8, 1.2) produces ±20 % size variation.
+        (min, max) multiplicative factor applied to each geom's radius.
     """
 
     affects_spec: bool = False
@@ -34,15 +31,12 @@ class FruitMeshVariantRandomizer(Randomizer):
 
     def __init__(
         self,
-        fruit_body_names: Optional[List[str]] = None,
-        scale_range: Tuple[float, float] = (0.8, 1.2),
+        geom_names: Sequence[str] = ("tomato_geom_a", "tomato_geom_b", "tomato_geom_c"),
+        scale_range: Tuple[float, float] = (0.85, 1.15),
     ) -> None:
-        if fruit_body_names is None:
-            fruit_body_names = ["apple_a", "apple_b", "apple_occluded"]
-        self.fruit_names: List[str] = list(fruit_body_names)
+        self.geom_names = list(geom_names)
         self.scale_lo, self.scale_hi = scale_range
-        # Cache compiled sizes keyed by geom id.
-        self._base_size: Dict[int, np.ndarray] = {}
+        self._base_sizes: Optional[dict] = None
 
     def apply(
         self,
@@ -53,26 +47,16 @@ class FruitMeshVariantRandomizer(Randomizer):
         rng: np.random.Generator,
         ext=None,
     ) -> None:
-        for name in self.fruit_names:
-            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
-            if bid == -1:
+        if self._base_sizes is None:
+            self._base_sizes = {}
+            for name in self.geom_names:
+                gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid != -1:
+                    self._base_sizes[name] = model.geom_size[gid].copy()
+
+        for name in self.geom_names:
+            gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            if gid == -1:
                 continue
-
-            geomadr = int(model.body_geomadr[bid])
-            geomnum = int(model.body_geomnum[bid])
-
-            for gi in range(geomnum):
-                gid = geomadr + gi
-                # Only resize sphere / capsule geoms.
-                gtype = int(model.geom_type[gid])
-                if gtype not in (
-                    mujoco.mjtGeom.mjGEOM_SPHERE,
-                    mujoco.mjtGeom.mjGEOM_CAPSULE,
-                ):
-                    continue
-
-                if gid not in self._base_size:
-                    self._base_size[gid] = model.geom_size[gid].copy()
-
-                sf = float(rng.uniform(self.scale_lo, self.scale_hi))
-                model.geom_size[gid] = self._base_size[gid] * sf
+            scale = float(rng.uniform(self.scale_lo, self.scale_hi))
+            model.geom_size[gid] = self._base_sizes[name] * scale

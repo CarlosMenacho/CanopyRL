@@ -29,8 +29,8 @@ _REGISTRY: Dict[str, type] = {
     "fruit_color": FruitColorRandomizer,
     "mesh_variant": MeshVariantRandomizer,
     "skybox": SkyboxRandomizer,
-    "background_image": BackgroundImageRandomizer,
     "fruit_mesh_variant": FruitMeshVariantRandomizer,
+    "background_image": BackgroundImageRandomizer,
     "table": MujocoTableRandomizer,
     "tree_pose": TreePoseRandomizer,
 }
@@ -89,8 +89,6 @@ def build_randomisers(
 
         cfg = {
             "lights":       {"enabled": True, "diffuse_range": [0.05, 0.3]},
-            "fruit_color":  "enabled",
-            "fruit_pose":   True,
             "robot_pose":   "disabled",
         }
         randomisers = build_randomisers(cfg)
@@ -100,10 +98,6 @@ def build_randomisers(
         lights:
           enabled: true
           diffuse_range: [0.05, 0.3]
-        fruit_color:
-          enabled: true
-        fruit_pose:
-          enabled: true
         robot_pose: disabled
     """
     xml_dir = Path(xml_dir)  # reserved for future asset-path resolution

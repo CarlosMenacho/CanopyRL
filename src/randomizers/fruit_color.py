@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import colorsys
-from typing import List, Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 import mujoco
 import numpy as np
@@ -12,24 +11,22 @@ __all__ = ["FruitColorRandomizer"]
 
 
 class FruitColorRandomizer(Randomizer):
-    """Randomises fruit colour by sampling in HSV colour space.
+    """Randomises the RGBA colour of fruit geoms each episode.
 
-    Keeps colours perceptually similar to real apples (red/yellow/green)
-    while providing lighting-robust variation for training.  Each episode
-    every fruit body receives an independently sampled colour.
+    Samples a colour for each listed geom from a hue range that spans
+    unripe (green) through ripening (yellow/orange) to fully ripe (red),
+    keeping the alpha channel fixed at 1.
 
     Parameters
     ----------
-    fruit_body_names:
-        MuJoCo *body* names whose geoms will be recoloured.
-    hue_center:
-        Central hue value in [0, 1].  0.02 ≈ red.
-    hue_spread:
-        ± half-width of the hue window.  0.12 reaches yellow-green.
-    saturation_range:
-        (min, max) saturation in [0, 1].
-    value_range:
-        (min, max) brightness in [0, 1].
+    geom_names:
+        Names of the fruit geoms to recolour.
+    hue_range:
+        (min, max) hue in [0, 1].  Defaults to red–orange–yellow range.
+    sat_range:
+        (min, max) HSV saturation.
+    val_range:
+        (min, max) HSV value (brightness).
     """
 
     affects_spec: bool = False
@@ -37,19 +34,40 @@ class FruitColorRandomizer(Randomizer):
 
     def __init__(
         self,
-        fruit_body_names: Optional[List[str]] = None,
-        hue_center: float = 0.02,
-        hue_spread: float = 0.12,
-        saturation_range: Tuple[float, float] = (0.75, 1.0),
-        value_range: Tuple[float, float] = (0.65, 1.0),
+        geom_names: Sequence[str] = ("tomato_geom_a", "tomato_geom_b", "tomato_geom_c"),
+        hue_range: Tuple[float, float] = (0.00, 0.18),
+        sat_range: Tuple[float, float] = (0.70, 1.00),
+        val_range: Tuple[float, float] = (0.75, 1.00),
     ) -> None:
-        if fruit_body_names is None:
-            fruit_body_names = ["apple_a", "apple_b", "apple_occluded"]
-        self.fruit_names: List[str] = list(fruit_body_names)
-        self.hue_center = hue_center
-        self.hue_spread = hue_spread
-        self.sat_lo, self.sat_hi = saturation_range
-        self.val_lo, self.val_hi = value_range
+        self.geom_names = list(geom_names)
+        self.hue_lo, self.hue_hi = hue_range
+        self.sat_lo, self.sat_hi = sat_range
+        self.val_lo, self.val_hi = val_range
+
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _hsv_to_rgb(h: float, s: float, v: float) -> np.ndarray:
+        """Convert HSV (all in [0,1]) to RGB array."""
+        if s == 0.0:
+            return np.array([v, v, v], dtype=float)
+        i = int(h * 6.0)
+        f = h * 6.0 - i
+        p = v * (1.0 - s)
+        q = v * (1.0 - s * f)
+        t = v * (1.0 - s * (1.0 - f))
+        i %= 6
+        if i == 0:
+            return np.array([v, t, p], dtype=float)
+        if i == 1:
+            return np.array([q, v, p], dtype=float)
+        if i == 2:
+            return np.array([p, v, t], dtype=float)
+        if i == 3:
+            return np.array([p, q, v], dtype=float)
+        if i == 4:
+            return np.array([t, p, v], dtype=float)
+        return np.array([v, p, q], dtype=float)
 
     def apply(
         self,
@@ -60,20 +78,13 @@ class FruitColorRandomizer(Randomizer):
         rng: np.random.Generator,
         ext=None,
     ) -> None:
-        for name in self.fruit_names:
-            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
-            if bid == -1:
+        for name in self.geom_names:
+            gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
+            if gid == -1:
                 continue
-
-            geomadr = int(model.body_geomadr[bid])
-            geomnum = int(model.body_geomnum[bid])
-            if geomnum == 0:
-                continue
-
-            h = (self.hue_center + rng.uniform(-self.hue_spread, self.hue_spread)) % 1.0
+            h = float(rng.uniform(self.hue_lo, self.hue_hi))
             s = float(rng.uniform(self.sat_lo, self.sat_hi))
             v = float(rng.uniform(self.val_lo, self.val_hi))
-            r, g, b = colorsys.hsv_to_rgb(h, s, v)
-
-            for gi in range(geomnum):
-                model.geom_rgba[geomadr + gi, :3] = [r, g, b]
+            rgb = self._hsv_to_rgb(h, s, v)
+            model.geom_rgba[gid, :3] = rgb
+            model.geom_rgba[gid, 3] = 1.0

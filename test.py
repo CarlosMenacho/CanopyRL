@@ -102,11 +102,11 @@ def main() -> None:
         "tree_pose": {
             "enabled": True
         },
-        # spec-modifying — need external assets, kept off for the live demo
-        "mesh_variant": {
+        "background_image": {
             "enabled": True
         },
-        "background_image": {
+        # spec-modifying — applied before compile() in training env
+        "mesh_variant": {
             "enabled": True
         },
     }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 import mujoco
 import numpy as np
@@ -11,19 +11,19 @@ __all__ = ["FruitPoseRandomizer"]
 
 
 class FruitPoseRandomizer(Randomizer):
-    """Randomises apple body positions relative to their parent branches.
+    """Randomises the vine body's world position each episode.
 
-    Applies a per-episode random offset to each fruit body's local
-    translation so the trained policy sees fruits at slightly different
-    positions on the branches, improving generalisation.
+    Applies small per-episode XYZ offsets to the vine's compiled pose so
+    the fruit cluster appears at slightly different locations relative to
+    the robot.  Deltas are always relative to the compiled default (cached
+    on first call) so they never accumulate across episodes.
 
     Parameters
     ----------
-    fruit_body_names:
-        MuJoCo body names for each fruit.  Defaults to the three apples
-        defined in world.xml.
+    body_name:
+        Name of the vine/fruit-cluster body to perturb.
     pos_delta_lo / pos_delta_hi:
-        Minimum and maximum XYZ offsets (metres) sampled each episode.
+        Per-axis (X, Y, Z) offset range in metres.
     """
 
     affects_spec: bool = False
@@ -31,18 +31,14 @@ class FruitPoseRandomizer(Randomizer):
 
     def __init__(
         self,
-        fruit_body_names: Optional[List[str]] = None,
-        pos_delta_lo: Sequence[float] = (-0.02, -0.02, -0.01),
-        pos_delta_hi: Sequence[float] = (0.02, 0.02, 0.01),
+        body_name: str = "vine",
+        pos_delta_lo: Sequence[float] = (-0.05, -0.10, -0.05),
+        pos_delta_hi: Sequence[float] = (0.05,  0.10,  0.05),
     ) -> None:
-        if fruit_body_names is None:
-            fruit_body_names = ["apple_a", "apple_b", "apple_occluded"]
-        self.fruit_names: List[str] = list(fruit_body_names)
+        self.body_name = body_name
         self.pos_lo = np.asarray(pos_delta_lo, dtype=float)
         self.pos_hi = np.asarray(pos_delta_hi, dtype=float)
-        # Cache original body positions so we always jitter from the
-        # compiled pose rather than accumulating across episodes.
-        self._base_pos: Dict[int, np.ndarray] = {}
+        self._base_pos: Optional[np.ndarray] = None
 
     def apply(
         self,
@@ -53,14 +49,11 @@ class FruitPoseRandomizer(Randomizer):
         rng: np.random.Generator,
         ext=None,
     ) -> None:
-        for name in self.fruit_names:
-            bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
-            if bid == -1:
-                continue
+        bid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, self.body_name)
+        if bid == -1:
+            return
 
-            # Cache compiled default on first call.
-            if bid not in self._base_pos:
-                self._base_pos[bid] = model.body_pos[bid].copy()
+        if self._base_pos is None:
+            self._base_pos = model.body_pos[bid].copy()
 
-            delta = rng.uniform(self.pos_lo, self.pos_hi)
-            model.body_pos[bid] = self._base_pos[bid] + delta
+        model.body_pos[bid] = self._base_pos + rng.uniform(self.pos_lo, self.pos_hi)
