@@ -1,73 +1,173 @@
+"""Domain-randomisation viewer for CanopyRL.
+
+Launches the MuJoCo 3-D viewer alongside a live eye-in-hand camera window.
+Press SPACE or R in the cv2 window to apply a new random episode.
+Press Q or Escape to quit.
+
+Usage::
+
+    python test.py [--seed SEED]
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import cv2
 import mujoco
 import mujoco.viewer
 import numpy as np
-import cv2
-import time
 
-model = mujoco.MjModel.from_xml_path("ufactory_xarm7/world.xml") # type: ignore
-data = mujoco.MjData(model) # type: ignore
+sys.path.insert(0, str(Path(__file__).parent))
+from src.randomizers.factory import build_randomisers
 
-renderer = mujoco.Renderer(model, height=480, width=640)
+WORLD_XML = "ufactory_xarm7/world.xml"
+CAM_NAME = "eye_in_hand"
+IMG_H, IMG_W = 480, 640
 
-cam_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "eye_in_hand") # type: ignore
-print(f"Camera 'eye_in_hand' ID: {cam_id}")
-print(f"Camera body ID: {model.cam_bodyid[cam_id]}")
+# Robot arm joints to apply pose noise to.  Limiting to the base and
+# shoulder keeps the end-effector near the tree canopy.
+_ARM_JOINTS = ["joint1", "joint2", "joint3"]
 
-print("Available joints:")
-for i in range(model.njnt):
-    joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, i) # type: ignore
-    if joint_name:
-        print(f"  Joint {i}: {joint_name}")
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+
+def _reset(model: mujoco.MjModel, data: mujoco.MjData) -> None:
+    """Reset to the home keyframe (or all-zeros if the model has none)."""
+    if model.nkey > 0:
+        mujoco.mj_resetDataKeyframe(model, data, 0)
     else:
-        print(f"  Joint {i}: [unnamed]")
+        mujoco.mj_resetData(model, data)
 
-joint_names = [
-    "joint1", "joint2", "joint3", "joint4", 
-    "joint5", "joint6", "joint7"
-]
 
-joint_indices = []
-for name in joint_names:
-    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name) # type: ignore
-    if joint_id != -1:
-        joint_indices.append(joint_id)
-        print(f"Found joint '{name}' with ID: {joint_id}")
-    else:
-        print(f"Joint '{name}' not found in model")
+def _randomise(randomisers, *, model: mujoco.MjModel, data: mujoco.MjData,
+               rng: np.random.Generator) -> None:
+    """Apply all model-level randomisers then recompute forward kinematics."""
+    for r in randomisers:
+        if not r.affects_spec:
+            r.apply(spec=None, model=model, data=data, rng=rng)
+    # mj_forward (not mj_step) so the arm stays frozen at its
+    # randomised pose — no gravity drift, no falling to equilibrium.
+    mujoco.mj_forward(model, data)
 
-step_count = 0
-with mujoco.viewer.launch_passive(model, data) as viewer:
-    start_time = time.time()
 
-    while viewer.is_running():
-        sim_time = data.time
+# ── main ──────────────────────────────────────────────────────────────────────
 
-        for i in range(7):
-            data.ctrl[i] = 0.5 * np.sin(sim_time * 2 + i)
 
-        # Step simulation
-        mujoco.mj_step(model, data) # type: ignore
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="CanopyRL domain-randomisation viewer")
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
 
-        if step_count % 500 == 0:
-            cam_body = model.cam_bodyid[cam_id]
-            print(f"[step {step_count}] cam body pos: {data.xpos[cam_body]}")
-        step_count += 1
+    rng = np.random.default_rng(args.seed)
 
-        # Render RGB from eye-in-hand camera
-        renderer.update_scene(data, camera="eye_in_hand")
-        rgb = renderer.render()
+    # ── randomiser config ─────────────────────────────────────────────────────
+    cfg = {
+        "lights": {
+            "enabled": True,
+            "diffuse_range": (0.05, 0.30),
+            "ambient_range": (0.00, 0.20),
+            "specular_range": (0.00, 0.50),
+        },
+        # Scope joint noise to base + shoulder only and keep the range
+        # small so the end-effector stays near the canopy.
+        "robot_pose": {
+            "enabled": True,
+            "joint_names": _ARM_JOINTS,
+            "joint_noise_range": (-1.0, 0.04),
+        },
+        "fruit_pose": {
+            "enabled": True
+        },
+        "camera_pose": {
+            "enabled": True,
+            "rot_enabled": True
+        },
+        "fruit_color": {
+            "enabled": True
+        },
+        "fruit_mesh_variant": {
+            "enabled": True,
+            "scale_range": (0.85, 1.15)
+        },
+        "skybox": {
+            "enabled": True,
+            "tint_range": (0.55, 1.45)
+        },
+        "table": {
+            "enabled": True
+        },
+        "tree_pose": {
+            "enabled": True
+        },
+        # spec-modifying — need external assets, kept off for the live demo
+        "mesh_variant": {
+            "enabled": True
+        },
+        "background_image": {
+            "enabled": True
+        },
+    }
 
-        # Render depth
-        renderer.enable_depth_rendering()
-        renderer.update_scene(data, camera="eye_in_hand")
-        depth = renderer.render()
-        renderer.disable_depth_rendering()
+    randomisers = build_randomisers(cfg)
+    print(f"[viewer] {len(randomisers)} randomiser(s) active:")
+    for r in randomisers:
+        print(f"  {type(r).__name__:<32s} affects_spec={r.affects_spec}")
 
-        # Display with cv2
-        cv2.imshow("RGB", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-        depth_normalized = (depth - depth.min()) / (depth.max() - depth.min() + 1e-6)
-        cv2.imshow("Depth", depth_normalized)
-        cv2.waitKey(1)
+    # ── compile once ──────────────────────────────────────────────────────────
+    spec = mujoco.MjSpec.from_file(WORLD_XML)
+    model = spec.compile()
+    data = mujoco.MjData(model)
 
-        # Sync viewer
-        viewer.sync()
+    _reset(model, data)
+    _randomise(randomisers, model=model, data=data, rng=rng)
+
+    renderer = mujoco.Renderer(model, height=IMG_H, width=IMG_W)
+    episode = 1
+
+    print()
+    print("[viewer] SPACE / R  — new random episode")
+    print("[viewer] Q / Esc    — quit")
+    print("[viewer] (click the cv2 window to receive key presses)")
+    print(f"[viewer] episode {episode}")
+
+    with mujoco.viewer.launch_passive(model, data) as viewer:
+        viewer.cam.azimuth = 150
+        viewer.cam.elevation = -20
+        viewer.cam.distance = 2.0
+        viewer.cam.lookat[:] = [0.5, 0.0, 0.8]
+
+        while viewer.is_running():
+            # ── key input ──────────────────────────────────────────────────
+            key = cv2.waitKey(1)
+            if key in (ord("q"), 27):
+                break
+            if key in (ord(" "), ord("r")):
+                episode += 1
+                _reset(model, data)
+                _randomise(randomisers, model=model, data=data, rng=rng)
+                print(f"[viewer] episode {episode}")
+
+            # mj_forward keeps the arm frozen at its randomised pose.
+            # Swap for mj_step if you add a position controller later.
+            mujoco.mj_forward(model, data)
+
+            # ── eye-in-hand camera window ──────────────────────────────────
+            renderer.update_scene(data, camera=CAM_NAME)
+            rgb = renderer.render()
+            cv2.imshow(
+                f"eye_in_hand  ep={episode}  [SPACE=randomise  Q=quit]",
+                cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
+            )
+
+            viewer.sync()
+
+    renderer.close()
+    cv2.destroyAllWindows()
+    print("[viewer] done.")
+
+
+if __name__ == "__main__":
+    main()
