@@ -4,11 +4,22 @@ defaults:
   - algorithm: sac
   - experiment: baseline
   - randomization: rand_conf
+  - rewards: reach
+  - models: default
+  - trainer: default
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-total_steps: 10000
+total_steps: 1_000_000
+device: cuda                  # cuda | cpu  (falls back to cpu automatically)
+
+# ── runtime flags ──────────────────────────────────────────────────────────
+headless_mode: true           # suppress interactive windows during training
+gen_video_test: 5             # episodes to record after training (0 = skip)
+
+# ── top-level training knobs (referenced by sub-configs via ${batch_size}) ─
+batch_size: 256
 
 hydra:
   job:

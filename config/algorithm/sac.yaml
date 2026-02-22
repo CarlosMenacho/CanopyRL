@@ -1,1 +1,19 @@
-data: drl
+name: sac
+
+# ── network ────────────────────────────────────────────────────────────────
+hidden_dim: 256
+
+# ── optimiser ──────────────────────────────────────────────────────────────
+lr_actor: 3e-4
+lr_critic: 3e-4
+lr_alpha: 3e-4
+
+# ── RL ─────────────────────────────────────────────────────────────────────
+gamma: 0.99                   # discount factor
+tau: 0.005                    # Polyak coefficient for target network
+reward_scale: 1.0             # multiply env reward before storing in buffer
+
+# ── entropy ────────────────────────────────────────────────────────────────
+# target_entropy is set automatically to -action_dim if left null
+target_entropy: null
+init_alpha: 1.0               # initial temperature

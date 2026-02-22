@@ -1,0 +1,17 @@
+# ── replay buffer ──────────────────────────────────────────────────────────
+batch_size: ${batch_size}     # pulled from root config
+buffer_capacity: 1_000_000
+
+# ── exploration / warmup ───────────────────────────────────────────────────
+learning_starts: 10_000       # random actions before first gradient update
+
+# ── update schedule ────────────────────────────────────────────────────────
+update_every: 1               # env steps between gradient updates
+gradient_steps: 1             # gradient updates per update call
+
+# ── logging ────────────────────────────────────────────────────────────────
+log_every: 1_000              # steps between console progress lines
+
+# ── checkpointing ──────────────────────────────────────────────────────────
+checkpoint_every: 50_000      # steps between saves (0 = only save at end)
+checkpoint_dir: checkpoints/

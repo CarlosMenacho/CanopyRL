@@ -31,10 +31,9 @@ camera_pose:
 
 fruit_color:
   enabled: true
-  hue_center: 0.02
-  hue_spread: 0.12
-  saturation_range: [0.75, 1.00]
-  value_range: [0.65, 1.00]
+  hue_range: [0.00, 0.14]
+  sat_range: [0.75, 1.00]
+  val_range: [0.65, 1.00]
 
 fruit_mesh_variant:
   enabled: true
