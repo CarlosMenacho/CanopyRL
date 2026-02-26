@@ -68,6 +68,7 @@ class Trainer:
 
             # ── env step ──────────────────────────────────────────────────
             next_obs, _, terminated, truncated, info = self.env.step(action)
+            info["action"] = action  # needed by energy + smoothness reward terms
             reward = self.reward_fn.compute(self.env.model, self.env.data, info)
             scaled_reward = reward * self.reward_scale
             done = terminated or truncated

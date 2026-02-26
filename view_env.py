@@ -103,7 +103,8 @@ def main() -> None:
             "enabled": True
         },
         "background_image": {
-            "enabled": True
+            "enabled": True,
+            "image_dir": "ufactory_xarm7/backgrounds"
         },
         # spec-modifying — applied before compile() in training env
         "mesh_variant": {

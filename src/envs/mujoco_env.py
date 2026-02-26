@@ -24,6 +24,18 @@ class MujocoEnv(BaseEnv):
         self._max_steps = cfg.env.get("max_episode_steps", 200)
         self._frame_skip = cfg.env.get("frame_skip", 1)
 
+        # IDs cached for action application
+        _gripper_act_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "gripper")
+        self._gripper_ctrl_max = float(self.model.actuator_ctrlrange[_gripper_act_id, 1])  # 255.0
+
+        # IDs cached for observation computation
+        self._base_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "link_base")
+        self._tcp_site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, "link_tcp")
+        _driver_jnt_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "left_driver_joint")
+        self._driver_qpos_addr = self.model.jnt_qposadr[_driver_jnt_id]
+        _jnt_range = self.model.jnt_range[_driver_jnt_id]
+        self._driver_range = float(_jnt_range[1] - _jnt_range[0])  # 0.85 for xarm gripper
+
     # ------------------------------------------------------------------
     # BaseEnv interface
     # ------------------------------------------------------------------
@@ -54,7 +66,8 @@ class MujocoEnv(BaseEnv):
 
     @property
     def obs_dim(self) -> int:
-        return self.model.nq + self.model.nv
+        # qpos + qvel + tcp_pos_rel (3) + tcp_quat_rel (4) + gripper_state (1)
+        return self.model.nq + self.model.nv + 8
 
     @property
     def action_dim(self) -> int:
@@ -65,11 +78,37 @@ class MujocoEnv(BaseEnv):
     # ------------------------------------------------------------------
 
     def _get_obs(self) -> np.ndarray:
-        return np.concatenate([self.data.qpos.copy(), self.data.qvel.copy()])
+        # --- joint state ---
+        qpos = self.data.qpos.copy()
+        qvel = self.data.qvel.copy()
+
+        # --- TCP pose relative to robot base ---
+        pos_base = self.data.xpos[self._base_body_id]
+        rot_base = self.data.xmat[self._base_body_id].reshape(3, 3)
+
+        pos_tcp = self.data.site_xpos[self._tcp_site_id]
+        rot_tcp = self.data.site_xmat[self._tcp_site_id].reshape(3, 3)
+
+        # position in base frame
+        tcp_pos_rel = rot_base.T @ (pos_tcp - pos_base)
+
+        # orientation relative to base (rotation matrix → quaternion)
+        rot_rel = rot_base.T @ rot_tcp
+        tcp_quat_rel = np.empty(4)
+        mujoco.mju_mat2Quat(tcp_quat_rel, rot_rel.flatten())
+
+        # --- gripper state: 0 = open, 1 = closed ---
+        gripper_state = np.array(
+            [self.data.qpos[self._driver_qpos_addr] / self._driver_range]
+        )
+
+        return np.concatenate([qpos, qvel, tcp_pos_rel, tcp_quat_rel, gripper_state])
 
     def _apply_action(self, action: np.ndarray) -> None:
-        np.clip(action, -1.0, 1.0, out=action)
-        self.data.ctrl[:] = action
+        # Arm joints (first nu-1): expected in [-1, 1]
+        self.data.ctrl[:-1] = np.clip(action[:-1], -1.0, 1.0)
+        # Gripper (last dim): expected in [0, 1] → scaled to [0, 255]
+        self.data.ctrl[-1] = np.clip(action[-1], 0.0, 1.0) * self._gripper_ctrl_max
 
     def _apply_randomizers(self) -> None:
         for r in self.randomizers:
