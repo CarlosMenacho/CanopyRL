@@ -3,14 +3,11 @@ from pathlib import Path
 
 import cv2
 import mujoco
-import numpy as np
-
 log = logging.getLogger(__name__)
 
 
 def record_video(
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
+    env,
     agent,
     reward_fn,
     n_episodes: int,
@@ -30,36 +27,33 @@ def record_video(
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    renderer = mujoco.Renderer(model, height=img_height, width=img_width)
+    renderer = mujoco.Renderer(env.model, height=img_height, width=img_width)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
     for ep in range(1, n_episodes + 1):
-        mujoco.mj_resetData(model, data)  # type: ignore[attr-defined]
+        obs, _ = env.reset()
         reward_fn.reset()
 
         video_path = str(out / f"episode_{ep:03d}.mp4")
         writer = cv2.VideoWriter(video_path, fourcc, fps, (img_width, img_height))
 
-        obs = np.concatenate([data.qpos.copy(), data.qvel.copy()])
         total_reward = 0.0
         step = 0
         done = False
 
         while not done:
             action = agent.select_action(obs, deterministic=True)
-            np.clip(action, -1.0, 1.0, out=action)
-            data.ctrl[:] = action
-            mujoco.mj_step(model, data)  # type: ignore[attr-defined]
+            obs, _, terminated, truncated, info = env.step(action)
             step += 1
 
-            renderer.update_scene(data, camera=cam_name)
+            renderer.update_scene(env.data, camera=cam_name)
             frame_rgb = renderer.render()
             writer.write(cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
 
-            reward = reward_fn.compute(model, data, {})
+            info["action"] = action
+            reward = reward_fn.compute(env.model, env.data, info)
             total_reward += reward
-            obs = np.concatenate([data.qpos.copy(), data.qvel.copy()])
-            done = step >= max_episode_steps
+            done = terminated or truncated or step >= max_episode_steps
 
         writer.release()
         log.info(f"[video] ep {ep}/{n_episodes}  steps={step}  "

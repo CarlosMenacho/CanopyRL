@@ -101,8 +101,7 @@ def main(cfg: DictConfig) -> None:
 
         log.info("Recording %d test episode(s)…", n_video)
         record_video(
-            model=env.model,
-            data=env.data,
+            env=env,
             agent=agent,
             reward_fn=reward_fn,
             n_episodes=n_video,
