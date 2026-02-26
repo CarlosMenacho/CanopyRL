@@ -3,10 +3,12 @@ from omegaconf import DictConfig
 from .base import BaseReward
 from .reach import ReachReward
 from .grasp import GraspReward
+from .picking import PickingReward
 
 _REGISTRY: dict[str, type[BaseReward]] = {
     "reach": ReachReward,
     "grasp": GraspReward,
+    "picking": PickingReward,
 }
 
 

@@ -1,0 +1,15 @@
+type: picking
+
+# Body used for grasp-contact check and proximity reward (TCP → target)
+target_body: tomato_a
+
+# Bodies whose displacement from episode-start is penalised (r_red)
+fruit_bodies:
+  - tomato_a
+
+# ── reward weights ────────────────────────────────────────────────────
+w_grasp: 1.0    # binary grasp success (both fingers contact target)
+w_prox:  1.0    # TCP proximity to target:  1 - tanh(5 * ||tcp - target||)
+w_red:   0.5    # fruit displacement penalty: 1 - tanh(5 * Σ ||Δpos||)
+w_e:     0.01   # energy penalty:            -||action||
+w_s:     0.01   # smoothness penalty:        -||action - action_prev||

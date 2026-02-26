@@ -14,18 +14,18 @@ lights:
 robot_pose:
   enabled: true
   pos_lo: [-0.04, -0.05, 0.00]
-  pos_hi: [ 0.04,  0.05, 0.10]
+  pos_hi: [0.04, 0.05, 0.10]
   rot_enabled: false
 
 fruit_pose:
   enabled: true
   pos_delta_lo: [-0.020, -0.020, -0.010]
-  pos_delta_hi: [ 0.020,  0.020,  0.010]
+  pos_delta_hi: [0.020, 0.020, 0.010]
 
 camera_pose:
   enabled: true
   pos_delta_lo: [-0.005, -0.005, -0.003]
-  pos_delta_hi: [ 0.005,  0.005,  0.003]
+  pos_delta_hi: [0.005, 0.005, 0.003]
   rot_enabled: true
   ang_range: [-0.05, 0.05]
 
@@ -52,14 +52,14 @@ table:
 tree_pose:
   enabled: true
   pos_delta_lo: [-0.05, -0.08, 0.0]
-  pos_delta_hi: [ 0.05,  0.08, 0.0]
+  pos_delta_hi: [0.05, 0.08, 0.0]
   yaw_enabled: true
   yaw_range: [-0.20, 0.20]
 
 # Disabled by default — requires a directory of background image files.
 background_image:
   enabled: false
-  # image_dir: assets/backgrounds
+  image_dir: ufactory_xarm7/backgrounds
 
 # Disabled by default — requires alternative mesh files to be present.
 mesh_variant:
