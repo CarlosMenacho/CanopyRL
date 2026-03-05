@@ -8,8 +8,8 @@ fruit_bodies:
   - tomato_a
 
 # ── reward weights ────────────────────────────────────────────────────
-w_grasp: 1.0    # binary grasp success (both fingers contact target)
-w_prox:  1.0    # TCP proximity to target:  1 - tanh(5 * ||tcp - target||)
-w_red:   0.5    # fruit displacement penalty: 1 - tanh(5 * Σ ||Δpos||)
-w_e:     0.01   # energy penalty:            -||action||
-w_s:     0.01   # smoothness penalty:        -||action - action_prev||
+w_grasp: 8.0    # binary grasp success (both fingers contact target)
+w_prox:  4.0    # TCP proximity to target:  1 - tanh(5 * ||tcp - target||)
+w_red:   1.0    # fruit displacement penalty: 1 - tanh(5 * Σ ||Δpos||)
+w_e:     2.0   # energy penalty:            -||action||
+w_s:     1.0   # smoothness penalty:        -||action - action_prev||

@@ -12,7 +12,8 @@ from src.models.critic import Critic
 class SAC(BaseAlgorithm):
     """Soft Actor-Critic (Haarnoja et al., 2018)."""
 
-    def __init__(self, cfg: DictConfig, obs_dim: int, action_dim: int, device: torch.device) -> None:
+    def __init__(self, cfg: DictConfig, obs_dim: int, action_dim: int, device: torch.device,
+                 img_h: int = 128, img_w: int = 128, latent_dim: int = 128) -> None:
         super().__init__(cfg, obs_dim, action_dim, device)
 
         hidden = cfg.get("hidden_dim", 256)
@@ -27,8 +28,8 @@ class SAC(BaseAlgorithm):
         te = cfg.get("target_entropy", None)
         self.target_entropy = float(te) if te is not None else float(-action_dim)
 
-        self.actor = Actor(obs_dim, action_dim, hidden).to(device)
-        self.critic = Critic(obs_dim, action_dim, hidden).to(device)
+        self.actor = Actor(obs_dim, action_dim, hidden, img_h=img_h, img_w=img_w, latent_dim=latent_dim).to(device)
+        self.critic = Critic(obs_dim, action_dim, hidden, img_h=img_h, img_w=img_w, latent_dim=latent_dim).to(device)
         self.critic_target = copy.deepcopy(self.critic)
 
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=lr_actor)
@@ -49,40 +50,49 @@ class SAC(BaseAlgorithm):
     def alpha(self) -> torch.Tensor:
         return self.log_alpha.exp()
 
-    def select_action(self, obs: np.ndarray, deterministic: bool = False) -> np.ndarray:
-        obs_t = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
+    def _to_tensors(self, state: np.ndarray, pixels: np.ndarray) -> tuple[torch.Tensor, torch.Tensor]:
+        s = torch.FloatTensor(state).to(self.device)
+        p = torch.ByteTensor(pixels).to(self.device)
+        return s, p
+
+    def select_action(self, obs: dict, deterministic: bool = False) -> np.ndarray:
+        state = obs["state"][np.newaxis]   # (1, state_dim)
+        pixels = obs["pixels"][np.newaxis]  # (1, H, W, C)
+        s, p = self._to_tensors(state, pixels)
         with torch.no_grad():
             if deterministic:
-                mu, _ = self.actor(obs_t)
+                mu, _ = self.actor(s, p)
                 action = torch.tanh(mu)
             else:
-                action, _ = self.actor.sample(obs_t)
+                action, _ = self.actor.sample(s, p)
         return action.cpu().numpy().squeeze(0)
 
     def update(self, batch: dict) -> dict[str, float]:
-        obs = torch.FloatTensor(batch["obs"]).to(self.device)
-        action = torch.FloatTensor(batch["action"]).to(self.device)
-        reward = torch.FloatTensor(batch["reward"]).unsqueeze(1).to(self.device)
-        next_obs = torch.FloatTensor(batch["next_obs"]).to(self.device)
-        done = torch.FloatTensor(batch["done"]).unsqueeze(1).to(self.device)
+        s  = torch.FloatTensor(batch["state"]).to(self.device)
+        p  = torch.ByteTensor(batch["pixels"]).to(self.device)
+        a  = torch.FloatTensor(batch["action"]).to(self.device)
+        r  = torch.FloatTensor(batch["reward"]).unsqueeze(1).to(self.device)
+        ns = torch.FloatTensor(batch["next_state"]).to(self.device)
+        np_ = torch.ByteTensor(batch["next_pixels"]).to(self.device)
+        d  = torch.FloatTensor(batch["done"]).unsqueeze(1).to(self.device)
 
         # --- Critic update ---
         with torch.no_grad():
-            next_action, next_log_pi = self.actor.sample(next_obs)
-            q1_t, q2_t = self.critic_target(next_obs, next_action)
-            q_target = reward + self.gamma * (1 - done) * (
+            next_action, next_log_pi = self.actor.sample(ns, np_)
+            q1_t, q2_t = self.critic_target(ns, np_, next_action)
+            q_target = r + self.gamma * (1 - d) * (
                 torch.min(q1_t, q2_t) - self.alpha * next_log_pi
             )
 
-        q1, q2 = self.critic(obs, action)
+        q1, q2 = self.critic(s, p, a)
         critic_loss = F.mse_loss(q1, q_target) + F.mse_loss(q2, q_target)
         self.critic_opt.zero_grad()
         critic_loss.backward()
         self.critic_opt.step()
 
         # --- Actor update ---
-        pi, log_pi = self.actor.sample(obs)
-        q1_pi, q2_pi = self.critic(obs, pi)
+        pi, log_pi = self.actor.sample(s, p)
+        q1_pi, q2_pi = self.critic(s, p, pi)
         actor_loss = (self.alpha * log_pi - torch.min(q1_pi, q2_pi)).mean()
         self.actor_opt.zero_grad()
         actor_loss.backward()
@@ -95,8 +105,8 @@ class SAC(BaseAlgorithm):
         self.alpha_opt.step()
 
         # --- Soft target update ---
-        for p, p_t in zip(self.critic.parameters(), self.critic_target.parameters()):
-            p_t.data.copy_(self.tau * p.data + (1 - self.tau) * p_t.data)
+        for p_param, p_t in zip(self.critic.parameters(), self.critic_target.parameters()):
+            p_t.data.copy_(self.tau * p_param.data + (1 - self.tau) * p_t.data)
 
         return {
             "loss/critic": critic_loss.item(),

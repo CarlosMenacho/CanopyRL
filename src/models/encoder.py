@@ -5,7 +5,7 @@ import torch.nn as nn
 class ImageEncoder(nn.Module):
     """Lightweight CNN encoder for eye-in-hand RGB observations."""
 
-    def __init__(self, in_channels: int = 3, latent_dim: int = 128) -> None:
+    def __init__(self, in_channels: int = 3, latent_dim: int = 128, img_h: int = 84, img_w: int = 84) -> None:
         super().__init__()
         self.latent_dim = latent_dim
         self.net = nn.Sequential(
@@ -19,7 +19,7 @@ class ImageEncoder(nn.Module):
         )
         # Determine flattened size with a dummy forward pass
         with torch.no_grad():
-            dummy = torch.zeros(1, in_channels, 84, 84)
+            dummy = torch.zeros(1, in_channels, img_h, img_w)
             flat_dim = self.net(dummy).shape[1]
 
         self.fc = nn.Linear(flat_dim, latent_dim)

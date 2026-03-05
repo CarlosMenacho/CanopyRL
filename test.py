@@ -30,14 +30,14 @@ from omegaconf import OmegaConf
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src.algorithms.sac import SAC
+from src.envs.mujoco_env import MujocoEnv
 from src.rewards.factory import build_reward
-from src.randomizers.factory import build_randomisers
 
 # ─── defaults ─────────────────────────────────────────────────────────────────
 
 WORLD_XML    = "ufactory_xarm7/world.xml"
 EYE_CAM      = "eye_in_hand"
-IMG_H, IMG_W = 480, 640
+DISPLAY_H, DISPLAY_W = 480, 640   # high-res for the cv2 viewer window
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -70,20 +70,6 @@ def _overlay(
     return out
 
 
-def _reset(model: mujoco.MjModel, data: mujoco.MjData) -> None:
-    if model.nkey > 0:
-        mujoco.mj_resetDataKeyframe(model, data, 0)
-    else:
-        mujoco.mj_resetData(model, data)
-
-
-def _apply_randomisers(randomisers, model, data, rng) -> None:
-    for r in randomisers:
-        if not r.affects_spec:
-            r.apply(spec=None, model=model, data=data, rng=rng)
-    mujoco.mj_forward(model, data)
-
-
 # ─── main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -96,10 +82,12 @@ def main() -> None:
                         help=f"Path to world XML (default: {WORLD_XML})")
     parser.add_argument("--alg-config", default="config/algorithm/sac.yaml",
                         help="Algorithm YAML — must match the trained network architecture")
-    parser.add_argument("--reward-config", default="config/rewards/reach.yaml",
+    parser.add_argument("--model-config", default="config/models/default.yaml",
+                        help="Model YAML (encoder latent_dim etc.)")
+    parser.add_argument("--env-config", default="config/env/mujoco.yaml",
+                        help="Env YAML (image size, camera name, etc.)")
+    parser.add_argument("--reward-config", default="config/rewards/picking.yaml",
                         help="Reward YAML used for the live reward signal")
-    parser.add_argument("--rand-config", default="config/randomization/rand_conf.yaml",
-                        help="Randomisation YAML (pass '' to skip)")
     parser.add_argument("--episodes", type=int, default=0,
                         help="Number of episodes to run (0 = infinite)")
     parser.add_argument("--max-steps", type=int, default=400,
@@ -112,33 +100,41 @@ def main() -> None:
     parser.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     args = parser.parse_args()
 
-    rng = np.random.default_rng(args.seed)
     device = torch.device(
         "cuda" if args.device == "cuda" and torch.cuda.is_available() else "cpu"
     )
     deterministic = not args.stochastic
 
-    # ── randomisers ───────────────────────────────────────────────────────────
-    randomisers = []
-    if not args.no_randomize and args.rand_config:
-        rand_cfg = OmegaConf.to_container(
-            OmegaConf.load(args.rand_config), resolve=True
-        )
-        randomisers = build_randomisers(rand_cfg)
-        print(f"[test] {len(randomisers)} randomiser(s) active:")
-        for r in randomisers:
-            print(f"       {type(r).__name__}")
+    # ── load configs ──────────────────────────────────────────────────────────
+    alg_cfg   = OmegaConf.load(args.alg_config)
+    model_cfg = OmegaConf.load(args.model_config)
+    env_cfg   = OmegaConf.load(args.env_config)
 
-    # ── load MuJoCo model ─────────────────────────────────────────────────────
-    model = mujoco.MjModel.from_xml_path(args.xml)  # type: ignore[attr-defined]
-    data  = mujoco.MjData(model)
-    obs_dim    = model.nq + model.nv
-    action_dim = model.nu
-    print(f"[test] obs_dim={obs_dim}  action_dim={action_dim}  device={device}")
+    # ── build a minimal cfg compatible with MujocoEnv ─────────────────────────
+    cfg = OmegaConf.create({
+        "seed": args.seed,
+        "env": {
+            "xml_path":          args.xml,
+            "max_episode_steps": args.max_steps,
+            "frame_skip":        int(env_cfg.get("frame_skip", 1)),
+            "cam_name":          env_cfg.get("cam_name", EYE_CAM),
+            "img_height":        int(env_cfg.get("img_height", 84)),
+            "img_width":         int(env_cfg.get("img_width", 84)),
+            "target_body":       env_cfg.get("target_body", "tomato_a"),
+        },
+        "randomization": {} if args.no_randomize else {},
+    })
+
+    # ── environment ───────────────────────────────────────────────────────────
+    env = MujocoEnv(cfg, xml_path=args.xml)
+    img_h, img_w, _ = env.img_shape
+    latent_dim = int(model_cfg.encoder.get("latent_dim", 128))
+    print(f"[test] obs_dim={env.obs_dim}  action_dim={env.action_dim}  "
+          f"img={img_h}x{img_w}  latent={latent_dim}  device={device}")
 
     # ── load agent ────────────────────────────────────────────────────────────
-    alg_cfg = OmegaConf.load(args.alg_config)
-    agent   = SAC(alg_cfg, obs_dim=obs_dim, action_dim=action_dim, device=device)
+    agent = SAC(alg_cfg, obs_dim=env.obs_dim, action_dim=env.action_dim,
+                device=device, img_h=img_h, img_w=img_w, latent_dim=latent_dim)
     agent.load(args.checkpoint)
     agent.actor.eval()
     print(f"[test] checkpoint: {args.checkpoint}")
@@ -146,31 +142,27 @@ def main() -> None:
     # ── reward function ───────────────────────────────────────────────────────
     reward_fn = build_reward(OmegaConf.load(args.reward_config))
 
-    # ── offscreen renderer (eye-in-hand) ──────────────────────────────────────
-    renderer = mujoco.Renderer(model, height=IMG_H, width=IMG_W)
+    # ── high-res renderer for the cv2 viewer window ───────────────────────────
+    display_renderer = mujoco.Renderer(env.model, height=DISPLAY_H, width=DISPLAY_W)
 
     # ── episode state ─────────────────────────────────────────────────────────
     ep           = 0
     step         = 0
     ep_reward    = 0.0
     total_reward = 0.0
-    obs          = np.zeros(obs_dim, dtype=np.float32)
+    obs, _       = env.reset()
 
-    def new_episode() -> None:
-        nonlocal ep, step, ep_reward, obs
+    def new_episode() -> dict:
+        nonlocal ep, step, ep_reward
         ep       += 1
         step      = 0
         ep_reward = 0.0
-        _reset(model, data)
-        if randomisers:
-            _apply_randomisers(randomisers, model, data, rng)
-        else:
-            mujoco.mj_forward(model, data)
-        obs = np.concatenate([data.qpos.copy(), data.qvel.copy()])
         reward_fn.reset()
         print(f"[test] ── episode {ep} ──")
+        return env.reset()[0]
 
-    new_episode()
+    ep = 1
+    print(f"[test] ── episode {ep} ──")
 
     print()
     print("[test] R / SPACE  — reset episode")
@@ -179,7 +171,7 @@ def main() -> None:
     print()
 
     # ── interactive viewer loop ───────────────────────────────────────────────
-    with mujoco.viewer.launch_passive(model, data) as viewer:
+    with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         viewer.cam.azimuth   = 150
         viewer.cam.elevation = -20
         viewer.cam.distance  = 2.0
@@ -194,38 +186,38 @@ def main() -> None:
             if key in (ord(" "), ord("r")):
                 print(f"[test] episode {ep} reset | "
                       f"steps={step} | ep_reward={ep_reward:+.3f}")
-                new_episode()
+                obs = new_episode()
 
             # ── policy step ───────────────────────────────────────────────────
             action = agent.select_action(obs, deterministic=deterministic)
-            np.clip(action, -1.0, 1.0, out=action)
-            data.ctrl[:] = action
-            mujoco.mj_step(model, data)  # type: ignore[attr-defined]
+            obs, _, terminated, truncated, info = env.step(action)
+            info["action"] = action
             step += 1
 
-            reward        = reward_fn.compute(model, data, {})
+            reward        = reward_fn.compute(env.model, env.data, info)
             ep_reward    += reward
             total_reward += reward
-            obs = np.concatenate([data.qpos.copy(), data.qvel.copy()])
 
             # ── auto-reset ────────────────────────────────────────────────────
-            if step >= args.max_steps:
+            done = terminated or truncated
+            if done:
                 print(f"[test] episode {ep} done | "
                       f"steps={step} | ep_reward={ep_reward:+.3f}")
                 if args.episodes > 0 and ep >= args.episodes:
                     break
-                new_episode()
+                obs = new_episode()
 
-            # ── eye-in-hand camera window ─────────────────────────────────────
-            renderer.update_scene(data, camera=EYE_CAM)
-            rgb = renderer.render()
+            # ── eye-in-hand camera window (high-res display) ──────────────────
+            display_renderer.update_scene(env.data, camera=EYE_CAM)
+            rgb = display_renderer.render()
             bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
             bgr = _overlay(bgr, ep, step, ep_reward, total_reward, deterministic)
             cv2.imshow("eye_in_hand  [R=reset  Q=quit]", bgr)
 
             viewer.sync()
 
-    renderer.close()
+    display_renderer.close()
+    env.close()
     cv2.destroyAllWindows()
     print(f"\n[test] done  |  episodes={ep}  total_reward={total_reward:+.3f}")
 

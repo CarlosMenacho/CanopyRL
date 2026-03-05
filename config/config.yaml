@@ -4,14 +4,14 @@ defaults:
   - algorithm: sac
   - experiment: baseline
   - randomization: rand_conf
-  - rewards: reach
+  - rewards: picking
   - models: default
   - trainer: default
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-total_steps: 1_000_000
+total_steps: 150_000
 device: cuda                  # cuda | cpu  (falls back to cpu automatically)
 
 # ── runtime flags ──────────────────────────────────────────────────────────

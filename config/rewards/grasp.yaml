@@ -1,6 +1,0 @@
-type: grasp
-target_body: tomato_a
-w_dist: 1.0                   # weight on end-effector → target distance
-w_contact: 5.0                # bonus per contact with the target fruit
-success_threshold: 0.05       # metres — distance below which counts as success
-success_bonus: 10.0           # one-shot bonus on success

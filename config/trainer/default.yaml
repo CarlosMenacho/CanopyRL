@@ -1,6 +1,6 @@
 # ── replay buffer ──────────────────────────────────────────────────────────
 batch_size: ${batch_size}     # pulled from root config
-buffer_capacity: 1_000_000
+buffer_capacity: 100_000
 
 # ── exploration / warmup ───────────────────────────────────────────────────
 learning_starts: 10_000       # random actions before first gradient update

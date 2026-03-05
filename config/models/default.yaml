@@ -2,7 +2,7 @@ hidden_dim: 256
 
 # ── image encoder (for pixel-based observations) ───────────────────────────
 encoder:
-  enabled: false
+  enabled: true
   in_channels: 3
   latent_dim: 128
   input_height: ${env.img_height}

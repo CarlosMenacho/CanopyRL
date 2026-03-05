@@ -155,10 +155,10 @@
                       <site name="link_tcp" pos="0 0 .172"/>
 
                       <!-- RGB-D camera side-mounted to clear the end_tool mesh -->
-                      <body name="rgbd_camera" pos="0.075 0 0.02">
+                      <body name="rgbd_camera" pos="-0.075 0 0.02">
                         <!-- Mounting bracket from gripper centre to camera body -->
                         <geom type="box" size="0.037 0.005 0.005"
-                              pos="-0.037 0 0"
+                              pos="0.037 0 0"
                               rgba="0.3 0.3 0.3 1"
                               contype="0" conaffinity="0"/>
                         <!-- Camera housing rotated independently of the sensor (~90 x 26 x 24 mm) -->

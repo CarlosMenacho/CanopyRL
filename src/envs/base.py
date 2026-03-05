@@ -6,12 +6,12 @@ class BaseEnv(ABC):
     """Abstract base class for all RL environments."""
 
     @abstractmethod
-    def reset(self) -> tuple[np.ndarray, dict]:
+    def reset(self) -> tuple[dict, dict]:
         """Reset env and return (obs, info)."""
         ...
 
     @abstractmethod
-    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: np.ndarray) -> tuple[dict, float, bool, bool, dict]:
         """Apply action and return (obs, reward, terminated, truncated, info)."""
         ...
 
@@ -30,4 +30,10 @@ class BaseEnv(ABC):
     @abstractmethod
     def action_dim(self) -> int:
         """Action space dimensionality."""
+        ...
+
+    @property
+    @abstractmethod
+    def img_shape(self) -> tuple[int, int, int]:
+        """Image observation shape (H, W, C)."""
         ...

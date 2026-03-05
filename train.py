@@ -64,11 +64,15 @@ def main(cfg: DictConfig) -> None:
     log.info("Reward: %s", cfg.rewards.type)
 
     # ── agent ─────────────────────────────────────────────────────────────
+    img_h, img_w, _ = env.img_shape
     agent = SAC(
         cfg=cfg.algorithm,
         obs_dim=env.obs_dim,
         action_dim=env.action_dim,
         device=device,
+        img_h=img_h,
+        img_w=img_w,
+        latent_dim=cfg.models.encoder.latent_dim,
     )
     log.info("Agent: SAC  |  hidden_dim=%d", cfg.algorithm.hidden_dim)
 

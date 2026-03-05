@@ -35,6 +35,7 @@ class Trainer:
             obs_dim=env.obs_dim,
             action_dim=env.action_dim,
             capacity=tcfg.buffer_capacity,
+            img_shape=env.img_shape,
         )
 
         self.batch_size = tcfg.batch_size
